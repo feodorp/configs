@@ -1,0 +1,149 @@
+# ~/.bashrc: executed by bash(1) for non-login shells.
+# Adapted for macOS with Bash installed via Homebrew.
+# Original Linux-specific paths and commands have been commented or adjusted where applicable.
+# Ensure Homebrew is installed and Bash is set as the default shell (e.g., chsh -s /opt/homebrew/bin/bash on Apple Silicon).
+
+# If not running interactively, don't do anything
+case $- in
+    *i*) ;;
+      *) return;;
+esac
+
+# Add local lib path (use DYLD_LIBRARY_PATH on macOS instead of LD_LIBRARY_PATH for dynamic libraries)
+export DYLD_LIBRARY_PATH="$HOME/.local/lib:$HOME/.local/lib/libhsl:/opt/homebrew/lib:${DYLD_LIBRARY_PATH}"
+
+# login to the debian VM
+alias debian_vm='ssh -F /Users/feodor/.lima/debian/ssh.config lima-debian'
+
+# Add Python user bin
+# export PY_USER_BIN=$(python3 -c 'import site; print(site.USER_BASE + "/bin")')
+# export PATH=$PY_USER_BIN:$PATH
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_HOME/bin:$PATH"
+eval "$(pyenv init --path)"
+eval "$(pyenv init -)"
+eval "$(pyenv virtualenv-init -)"
+
+export PATH="/opt/homebrew/bin:$PATH"
+
+# Don't put duplicate lines or lines starting with space in the history.
+HISTCONTROL=ignoreboth
+
+# Append to the history file, don't overwrite it
+shopt -s histappend
+
+# For setting history length
+HISTSIZE=100000
+HISTFILESIZE=200000
+
+# Check the window size after each command
+shopt -s checkwinsize
+
+# If set, the pattern "**" used in a pathname expansion context will match all files and directories
+# shopt -s globstar
+
+# Make less more friendly for non-text input files
+# [ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"  # lesspipe may need installation via Homebrew
+export LESSOPEN="|/opt/homebrew/bin/lesspipe.sh %s"
+
+# Set variable identifying the chroot (less relevant on macOS, but retained)
+if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
+    debian_chroot=$(cat /etc/debian_chroot)
+fi
+
+# Set a fancy prompt (non-color, unless we know we want color)
+case "$TERM" in
+    xterm-color|*-256color) color_prompt=yes;;
+esac
+
+# Color codes (tput works on macOS Terminal/iTerm)
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+yellow=$(tput setaf 3)
+yellow2=$(tput setaf 190)
+blue=$(tput setaf 4)
+blue2=$(tput setaf 12)
+magenta=$(tput setaf 5)
+cyan=$(tput setaf 6)
+silver=$(tput setaf 7)
+grey=$(tput setaf 8)
+pink=$(tput setaf 9)
+default=$(tput sgr0)
+
+# User config
+if [ $UID == 0 ]; then
+  ucolor=$red
+else
+  ucolor=$yellow
+fi
+
+# Uncomment for a colored prompt if desired
+# force_color_prompt=yes
+
+if [ -n "$force_color_prompt" ]; then
+    if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
+	color_prompt=yes
+    else
+	color_prompt=
+    fi
+fi
+
+get_current_dir() {
+  dcolor=${1-'default'}
+  pcolor=${2-'default'}
+  pwd|awk -F/ -v n="$(tput cols)" -v h="^$HOME" -v u="$(echo $USER@$HOSTNAME|cut -d . -f 1)" -v r="${!pcolor}" -v d="${!dcolor}" \
+    '{sub(h,"~"); n=n-length(u)-8;} length($0)<=n || NF==2 {print d$0; exit;} \
+    NF>2 {b=d$1"/"$2"/"r".."d"/"; e=$NF; n=n-length(b e)+length(d r d); for (i=NF-1; i>2; i--) \
+    {n-=length($i)+1; if (n < 0) break; e=$i"/"e}} {print b e;}'
+}
+if [ "$color_prompt" = yes ]; then
+  PS1="\[${blue2}\]╭─(\[${ucolor}\]\u\[${blue2}\]@\[${silver}\]\h\[${blue2}\])-[\$(get_current_dir 'green' 'red')\[${blue2}\]]\n\[${blue2}\]╰─(\[${yellow2}\]\$(date +%H:%M)\[${blue2}\])>\[${default}\] "
+else
+  PS1="╭─(\u@\h)-[\$(get_current_dir)]\n╰─(\$(date +%H:%M))> "
+fi
+unset color_prompt force_color_prompt
+
+# If this is an xterm set the title (works in macOS Terminal/iTerm)
+case "$TERM" in
+xterm*|rxvt*)
+    PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
+    ;;
+*)
+    ;;
+esac
+
+# Enable color support for ls
+if [ -x /opt/homebrew/bin/gdircolors ]; then  # Adjust for Homebrew path
+    test -r ~/.dircolors && eval "$(gdircolors -b ~/.dircolors)" || eval "$(gdircolors -b)"
+    alias ls='gls --color=auto'
+    alias dir='gdir --color=auto'
+    alias vdir='gvdir --color=auto'
+    alias grep='grep --color=auto'  # grep on macOS supports --color
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+fi
+
+# Colored GCC warnings and errors (if using GCC from Homebrew)
+export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
+
+# Some ls aliases (adjust to gls if coreutils installed)
+alias ll='ls -alvFh --group-directories-first'
+alias la='ls -A'
+alias l='ls -CF'
+# alias dualscreen=...  # xrandr not available on macOS; use System Settings for displays
+
+# Alias definitions (load from separate file if exists)
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
+
+# Enable programmable completion features (install bash-completion via Homebrew: brew install bash-completion@2)
+# Add to /opt/homebrew/etc/profile.d/bash_completion.sh or source manually
+if ! shopt -oq posix; then
+  if [ -f /opt/homebrew/etc/bash_completion ]; then  # Adjust for Homebrew path
+    . /opt/homebrew/etc/bash_completion
+  fi
+fi
+
+# Source fzf if installed (brew install fzf)
+[ -f ~/.fzf.bash ] && source ~/.fzf.bash
