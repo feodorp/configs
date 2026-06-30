@@ -1,7 +1,5 @@
-# ~/.bashrc: executed by bash(1) for non-login shells.
-# Adapted for macOS with Bash installed via Homebrew.
-# Original Linux-specific paths and commands have been commented or adjusted where applicable.
-# Ensure Homebrew is installed and Bash is set as the default shell (e.g., chsh -s /opt/homebrew/bin/bash on Apple Silicon).
+# ~/.bashrc — sourced from ~/.bash_profile so it also loads in macOS login shells.
+# Adapted for macOS with Bash installed via Homebrew (chsh -s /opt/homebrew/bin/bash).
 
 # If not running interactively, don't do anything
 case $- in
@@ -9,22 +7,27 @@ case $- in
       *) return;;
 esac
 
-# Add local lib path (use DYLD_LIBRARY_PATH on macOS instead of LD_LIBRARY_PATH for dynamic libraries)
-export DYLD_LIBRARY_PATH="$HOME/.local/lib:$HOME/.local/lib/libhsl:/opt/homebrew/lib:${DYLD_LIBRARY_PATH}"
+# --- Homebrew (Apple Silicon): set up FIRST so pyenv's shims can sit in front of it ---
+eval "$(/opt/homebrew/bin/brew shellenv)"
+
+# Local runtime libraries (HSL, etc.).
+# Use DYLD_FALLBACK_LIBRARY_PATH, not DYLD_LIBRARY_PATH: the latter is *forced* (it overrides each
+# binary's correctly-linked libraries) and is stripped by SIP whenever the load chain crosses a
+# system-protected binary. FALLBACK is consulted only when the normal lookup fails — which is
+# exactly what you want for adding HSL without shadowing anything else.
+export DYLD_FALLBACK_LIBRARY_PATH="$HOME/.local/lib:$HOME/.local/lib/libhsl:/opt/homebrew/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
 
 # login to the debian VM
 alias debian_vm='ssh -F /Users/feodor/.lima/debian/ssh.config lima-debian'
 
-# Add Python user bin
-# export PY_USER_BIN=$(python3 -c 'import site; print(site.USER_BASE + "/bin")')
-# export PATH=$PY_USER_BIN:$PATH
-export PYENV_ROOT="$HOME/.pyenv"
-export PATH="$PYENV_HOME/bin:$PATH"
-eval "$(pyenv init --path)"
-eval "$(pyenv init -)"
-eval "$(pyenv virtualenv-init -)"
+# pip install --user console scripts (for a pyenv CPython these land in ~/.local/bin)
+export PATH="$HOME/.local/bin:$PATH"
 
-export PATH="/opt/homebrew/bin:$PATH"
+# --- pyenv: set up LAST so its shims take precedence over Homebrew's python ---
+export PYENV_ROOT="$HOME/.pyenv"
+[[ -d "$PYENV_ROOT/bin" ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init - bash)"
+eval "$(pyenv virtualenv-init -)"
 
 # Don't put duplicate lines or lines starting with space in the history.
 HISTCONTROL=ignoreboth
@@ -43,7 +46,6 @@ shopt -s checkwinsize
 # shopt -s globstar
 
 # Make less more friendly for non-text input files
-# [ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"  # lesspipe may need installation via Homebrew
 export LESSOPEN="|/opt/homebrew/bin/lesspipe.sh %s"
 
 # Set variable identifying the chroot (less relevant on macOS, but retained)
@@ -112,13 +114,13 @@ xterm*|rxvt*)
     ;;
 esac
 
-# Enable color support for ls
-if [ -x /opt/homebrew/bin/gdircolors ]; then  # Adjust for Homebrew path
+# Enable color support for ls (GNU coreutils via Homebrew, g-prefixed)
+if [ -x /opt/homebrew/bin/gdircolors ]; then
     test -r ~/.dircolors && eval "$(gdircolors -b ~/.dircolors)" || eval "$(gdircolors -b)"
     alias ls='gls --color=auto'
     alias dir='gdir --color=auto'
     alias vdir='gvdir --color=auto'
-    alias grep='grep --color=auto'  # grep on macOS supports --color
+    alias grep='grep --color=auto'
     alias fgrep='fgrep --color=auto'
     alias egrep='egrep --color=auto'
 fi
@@ -126,22 +128,20 @@ fi
 # Colored GCC warnings and errors (if using GCC from Homebrew)
 export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
 
-# Some ls aliases (adjust to gls if coreutils installed)
+# Some ls aliases (these use GNU ls flags, so they rely on the gls alias above / coreutils)
 alias ll='ls -alvFh --group-directories-first'
 alias la='ls -A'
 alias l='ls -CF'
-# alias dualscreen=...  # xrandr not available on macOS; use System Settings for displays
 
 # Alias definitions (load from separate file if exists)
 if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
 fi
 
-# Enable programmable completion features (install bash-completion via Homebrew: brew install bash-completion@2)
-# Add to /opt/homebrew/etc/profile.d/bash_completion.sh or source manually
+# Programmable completion (bash-completion@2 for Homebrew's bash 5 installs its loader here)
 if ! shopt -oq posix; then
-  if [ -f /opt/homebrew/etc/bash_completion ]; then  # Adjust for Homebrew path
-    . /opt/homebrew/etc/bash_completion
+  if [[ -r /opt/homebrew/etc/profile.d/bash_completion.sh ]]; then
+    . /opt/homebrew/etc/profile.d/bash_completion.sh
   fi
 fi
 
